@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Privado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5dc; /* Fondo beige */
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #login-box {
+            background-color: #fffaf0; /* Fondo beige claro */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        #login-box input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        #login-box button {
+            background-color: #d2b48c; /* Marrón claro */
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #container {
+            display: flex;
+            flex: 1;
+        }
+
+        #users {
+            width: 250px;
+            background-color: #f0e6d2; /* Beige claro */
+            border-right: 1px solid #d2b48c; /* Marrón claro */
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #users h2 {
+            color: #8b4513; /* Marrón oscuro */
+        }
+
+        #users ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        #users li {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #fffaf0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #users li:hover {
+            background-color: #d2b48c; /* Marrón claro */
+            color: white;
+        }
+
+        #chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        #messages {
+            flex: 1;
+            border: 1px solid #d2b48c; /* Marrón claro */
+            border-radius: 5px;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #fffaf0; /* Fondo beige claro */
+        }
+
+        #form {
+            display: flex;
+            margin-top: 10px;
+        }
+
+        #input {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #d2b48c;
+            border-radius: 5px;
+        }
+
+        #send {
+            background-color: #d2b48c; /* Marrón claro */
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+        }
+
+        .message.sent {
+            background-color: #d2b48c; /* Marrón claro */
+            color: white;
+            align-self: flex-end;
+        }
+
+        .message.received {
+            background-color: #fffaf0; /* Beige claro */
+            color: black;
+            align-self: flex-start;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        <div id="login-box">
+            <h2>Bienvenido al Chat</h2>
+            <input id="username" placeholder="Ingresa tu nombre..." />
+            <button id="login-button">Entrar</button>
+        </div>
+    </div>
+    <div id="container" style="display: none;">
+        <div id="users">
+            <h2>Usuarios Conectados</h2>
+            <ul id="user-list"></ul>
+        </div>
+        <div id="chat">
+            <div id="messages"></div>
+            <form id="form">
+                <input id="input" autocomplete="off" placeholder="Escribe un mensaje..." />
+                <button id="send">Enviar</button>
+            </form>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Elementos del DOM
+        const overlay = document.getElementById('overlay');
+        const loginBox = document.getElementById('login-box');
+        const usernameInput = document.getElementById('username');
+        const loginButton = document.getElementById('login-button');
+        const container = document.getElementById('container');
+        const userList = document.getElementById('user-list');
+        const messages = document.getElementById('messages');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+
+        let currentRecipient = null;
+
+        // Registrar usuario
+        loginButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            if (username) {
+                socket.emit('register', username);
+                overlay.style.display = 'none';
+                container.style.display = 'flex';
+            } else {
+                alert('Por favor, ingresa tu nombre.');
+            }
+        });
+
+        // Actualizar la lista de usuarios
+        socket.on('update users', (users) => {
+            userList.innerHTML = '';
+            Object.entries(users).forEach(([id, name]) => {
+                if (id !== socket.id) {
+                    const userItem = document.createElement('li');
+                    userItem.textContent = name;
+                    userItem.addEventListener('click', () => {
+                        currentRecipient = id;
+                        alert(`Ahora estás chateando con ${name}`);
+                    });
+                    userList.appendChild(userItem);
+                }
+            });
+        });
+
+        // Enviar mensaje
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const msg = input.value;
+            if (msg && currentRecipient) {
+                socket.emit('private message', { recipientId: currentRecipient, message: msg });
+                const item = document.createElement('div');
+                item.textContent = `Tú: ${msg}`;
+                item.classList.add('message', 'sent');
+                messages.appendChild(item);
+                input.value = '';
+            } else {
+                alert('Selecciona un usuario primero.');
+            }
+        });
+
+        // Recibir mensaje privado
+        socket.on('private message', ({ sender, message }) => {
+            const item = document.createElement('div');
+            item.textContent = `${sender}: ${message}`;
+            item.classList.add('message', 'received');
+            messages.appendChild(item);
+            messages.scrollTop = messages.scrollHeight;
+        });
+    </script>
+</body>
+</html>
